@@ -1,6 +1,7 @@
 import os
 import json
 import re
+
 from dotenv import load_dotenv
 import google.generativeai as genai
 
@@ -9,7 +10,9 @@ load_dotenv()
 API_KEY = os.getenv("GOOGLE_API_KEY")
 
 if not API_KEY:
-    raise ValueError("GOOGLE_API_KEY not found in .env")
+    raise ValueError(
+        "GOOGLE_API_KEY not found in .env"
+    )
 
 genai.configure(api_key=API_KEY)
 
@@ -23,36 +26,37 @@ def load_schema(schema_path="schema.json"):
 
 def build_prompt(user_question, schema):
     return f"""
-You are an expert SQL assistant.
+You are an expert SQLite assistant.
 
-Your task is to convert the user's question into a SQLite SELECT query.
+Generate SQL for the user's question.
 
-RULES:
-1. Generate ONLY SELECT queries.
-2. Never generate DELETE, DROP, UPDATE, INSERT, ALTER, or TRUNCATE statements.
-3. Use ONLY the tables and columns provided below.
-4. Use valid joins based on foreign keys.
-5. Return your response ONLY as valid JSON.
-6. Do not include markdown formatting.
+STRICT RULES:
 
-Database Schema:
+1. Generate ONLY SELECT statements.
+2. Never generate DELETE, DROP, UPDATE,
+INSERT, ALTER, TRUNCATE.
+3. Use ONLY the schema below.
+4. Return ONLY valid JSON.
+5. Do NOT wrap output in markdown.
+
+Schema:
 {json.dumps(schema, indent=2)}
 
-Return JSON in this format:
+Return JSON exactly like:
 
 {{
-    "sql": "<generated_sql>",
+    "sql": "<sql_query>",
     "explanation": "<brief explanation>"
 }}
 
-User Question:
+Question:
 {user_question}
 """
 
 
 def extract_json(response_text):
     """
-    Extract JSON even if Gemini wraps it in markdown.
+    Extract JSON from Gemini output.
     """
 
     response_text = response_text.strip()
@@ -65,6 +69,12 @@ def extract_json(response_text):
     )
 
     response_text = re.sub(
+        r"^```",
+        "",
+        response_text
+    )
+
+    response_text = re.sub(
         r"```$",
         "",
         response_text
@@ -73,27 +83,47 @@ def extract_json(response_text):
     return json.loads(response_text.strip())
 
 
-def generate_sql(user_question):
+def generate_sql(question):
+    """
+    Returns:
+    {
+        "sql": "...",
+        "explanation": "..."
+    }
+    """
+
     schema = load_schema()
 
-    prompt = build_prompt(user_question, schema)
+    prompt = build_prompt(
+        question,
+        schema
+    )
 
-    model = genai.GenerativeModel(MODEL_NAME)
+    model = genai.GenerativeModel(
+        MODEL_NAME
+    )
 
-    response = model.generate_content(prompt)
+    response = model.generate_content(
+        prompt
+    )
 
-    result = extract_json(response.text)
-
-    return result
+    return extract_json(
+        response.text
+    )
 
 
 if __name__ == "__main__":
 
-    question = "What are the top 5 selling products by quantity?"
+    question = (
+        "What are the top 5 "
+        "selling products?"
+    )
 
-    result = generate_sql(question)
+    result = generate_sql(
+        question
+    )
 
-    print("\nGenerated SQL:")
+    print("\nSQL:")
     print(result["sql"])
 
     print("\nExplanation:")
