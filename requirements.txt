@@ -1,0 +1,6 @@
+streamlit
+google-generativeai
+sqlglot
+pandas
+faker
+python-dotenv
